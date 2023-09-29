@@ -1,2 +1,5 @@
 # prodigy-ann
-A Prodigy pluging for ANN techniques
+
+![](images/approach.png)
+
+A Prodigy plugin for techniques that involve approximate nearest neighbors.
