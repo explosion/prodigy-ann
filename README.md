@@ -16,3 +16,6 @@ pip install "prodigy-ann @ git+https://github.com/explosion/prodigy-ann"
 
 To learn more about this plugin, you can check the [Prodigy docs](https://prodi.gy/docs/plugins/#ann).
 
+## Issues? 
+
+Are you have trouble with this plugin? Let us know on our [support forum](https://support.prodi.gy/) and we'll get back to you! 
