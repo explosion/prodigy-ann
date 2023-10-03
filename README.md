@@ -1,10 +1,10 @@
 <a href="https://explosion.ai"><img src="https://explosion.ai/assets/img/logo.svg" width="125" height="125" align="right" /></a>
 
-# Prodigy-ANN
+# 🏘 Prodigy-ANN
 
 ![](images/approach.png)
 
-This repository contains a Prodigy plugin for techniques that involve approximate nearest neighbors to fetch relevant subsets of the data to curate. To encode the text this library uses
+This repository contains a Prodigy plugin for recipes that involve approximate nearest neighbor (ANN) techniques to fetch relevant subsets of the data to curate. To encode the text this library uses
 [sentence-transformers](https://sbert.org) and it uses
 [hnswlib](https://github.com/nmslib/hnswlib) as an index for these vectors.
 
