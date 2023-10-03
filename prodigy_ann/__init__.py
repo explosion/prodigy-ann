@@ -8,7 +8,7 @@ from sentence_transformers import SentenceTransformer
 from hnswlib import Index
 from tqdm import tqdm
 
-from prodigy import msg, recipe
+from prodigy import recipe
 from prodigy.recipes.textcat import manual as textcat_manual
 from prodigy.recipes.ner import manual as ner_manual
 from prodigy.recipes.spans import manual as spans_manual
@@ -60,14 +60,14 @@ def new_example_stream(
 @recipe(
     "ann.text.index",
     # fmt: off
-    examples=("Datafile to annotate", "positional", None, str),
-    out_path=("Path trained index", "positional", None, Path),
+    source=("Path to text source to index", "positional", None, str),
+    index_path=("Path of trained index", "positional", None, Path),
     # fmt: on
 )
-def index(examples: Path, out_path: Path):
+def index(source: Path, index_path: Path):
     """Builds an HSNWLIB index on example text data."""
     # Store sentences as a list, not perfect, but works.
-    examples = [ex["text"] for ex in srsly.read_jsonl(examples)]
+    examples = [ex["text"] for ex in srsly.read_jsonl(source)]
 
     # Setup index
     model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -80,26 +80,26 @@ def index(examples: Path, out_path: Path):
         index.add_items(embeddings)
     
     # Hnswlib demands a string as an output path
-    index.save_index(str(out_path))
+    index.save_index(str(index_path))
 
 
 @recipe(
     "ann.text.fetch",
     # fmt: off
-    examples=("Examples that have been indexed", "positional", None, str),
-    index_path=("Path to trained index", "positional", None, Path),
+    source=("Path to text source that has been indexed", "positional", None, str),
+    index_path=("Path to index", "positional", None, Path),
     out_path=("Path to write examples into", "positional", None, Path),
     query=("ANN query to run", "option", "q", str),
     n=("Number of results to return", "option", "n", int),
     # fmt: on
 )
-def fetch(examples: Path, index_path: Path, out_path: Path, query:str, n:int=200):
-    """Fetch a relevant subset using a pretrained index."""
+def fetch(source: Path, index_path: Path, out_path: Path, query:str, n:int=200):
+    """Fetch a relevant subset using a HNSWlib index."""
     if not query:
         raise ValueError("must pass query")
     
     # Store sentences as a list, not perfect, but works.
-    examples = [ex["text"] for ex in srsly.read_jsonl(examples)]
+    examples = [ex["text"] for ex in srsly.read_jsonl(source)]
 
     # Setup index
     model = SentenceTransformer('all-MiniLM-L6-v2')
