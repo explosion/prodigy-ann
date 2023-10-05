@@ -143,7 +143,6 @@ def textcat_ann_manual(
     index_path=("Path to trained index", "positional", None, Path),
     labels=("Comma seperated labels to use", "option", "l", str),
     query=("ANN query to run", "option", "q", str),
-    exclusive=("Labels are exclusive", "flag", "e", bool),
     # fmt: on
 )
 def ner_ann_manual(
@@ -153,13 +152,12 @@ def ner_ann_manual(
     index_path: Path,
     labels:str,
     query:str,
-    exclusive:bool = False
 ):
     """Run ner.manual using a query to populate the stream."""
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
         fetch(examples, index_path, out_path=tmpfile.name, query=query)
         stream = list(srsly.read_jsonl(tmpfile.name))
-        ner_manual(dataset, nlp, stream, label=labels, exclusive=exclusive)
+        ner_manual(dataset, nlp, stream, label=labels)
 
 
 @recipe(
@@ -172,7 +170,6 @@ def ner_ann_manual(
     labels=("Comma seperated labels to use", "option", "l", str),
     patterns=("Path to match patterns file", "option", "pt", Path),
     query=("ANN query to run", "option", "q", str),
-    exclusive=("Labels are exclusive", "flag", "e", bool),
     # fmt: on
 )
 def spans_ann_manual(
@@ -183,10 +180,9 @@ def spans_ann_manual(
     labels:str,
     query:str,
     patterns: Optional[Path] = None,
-    exclusive:bool = False
 ):
     """Run spans.manual using a query to populate the stream."""
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
         fetch(examples, index_path, out_path=tmpfile.name, query=query)
         stream = list(srsly.read_jsonl(tmpfile.name))
-        spans_manual(dataset, nlp, stream, label=labels, exclusive=exclusive, patterns=patterns)
+        spans_manual(dataset, nlp, stream, label=labels, patterns=patterns)
