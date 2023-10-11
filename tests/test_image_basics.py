@@ -1,7 +1,7 @@
 import spacy 
 import srsly 
 from pathlib import Path 
-from prodigy_ann import index, fetch, textcat_ann_manual, ner_ann_manual, spans_ann_manual
+from prodigy_ann.text import text_index, text_fetch, textcat_ann_manual, ner_ann_manual, spans_ann_manual
 
 
 def test_basics(tmpdir):
@@ -11,8 +11,8 @@ def test_basics(tmpdir):
     query = "benchmarks"
 
     # Ensure fetch works as expected
-    index(examples_path, index_path)
-    fetch(examples_path, index_path, fetch_path, query="benchmarks")
+    text_index(examples_path, index_path)
+    text_fetch(examples_path, index_path, fetch_path, query="benchmarks")
     
     fetched_examples = list(srsly.read_jsonl(fetch_path))
     for ex in fetched_examples:
