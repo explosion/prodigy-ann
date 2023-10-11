@@ -20,7 +20,7 @@ from prodigy_ann.util import batched, setup_index, load_index, new_example_strea
     index_path=("Path of trained index", "positional", None, Path),
     # fmt: on
 )
-def text_index(source: Path, index_path: Path):
+def image_index(source: Path, index_path: Path):
     """Builds an HSNWLIB index on example text data."""
     # Store sentences as a list, not perfect, but works.
     stream = get_stream(source)
@@ -50,7 +50,7 @@ def text_index(source: Path, index_path: Path):
     n=("Number of results to return", "option", "n", int),
     # fmt: on
 )
-def text_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: int = 200):
+def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: int = 200):
     """Fetch a relevant subset using a HNSWlib index."""
     if not query:
         raise ValueError("must pass query")
@@ -86,7 +86,7 @@ def textcat_ann_manual(
 ):
     """Run textcat.manual using a query to populate the stream."""
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
-        text_fetch(examples, index_path, out_path=tmpfile.name, query=query)
+        image_fetch(examples, index_path, out_path=tmpfile.name, query=query)
         stream = list(srsly.read_jsonl(tmpfile.name))
         return textcat_manual(dataset, stream, label=labels.split(","), exclusive=exclusive)
 
@@ -112,7 +112,7 @@ def ner_ann_manual(
 ):
     """Run ner.manual using a query to populate the stream."""
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
-        text_fetch(examples, index_path, out_path=tmpfile.name, query=query)
+        image_fetch(examples, index_path, out_path=tmpfile.name, query=query)
         stream = list(srsly.read_jsonl(tmpfile.name))
         ner_manual(dataset, nlp, stream, label=labels)
 
@@ -140,6 +140,6 @@ def spans_ann_manual(
 ):
     """Run spans.manual using a query to populate the stream."""
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
-        text_fetch(examples, index_path, out_path=tmpfile.name, query=query)
+        image_fetch(examples, index_path, out_path=tmpfile.name, query=query)
         stream = list(srsly.read_jsonl(tmpfile.name))
         spans_manual(dataset, nlp, stream, label=labels, patterns=patterns)
