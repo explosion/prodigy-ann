@@ -5,13 +5,23 @@ from typing import Optional
 import srsly
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
+from PIL import Image
 
 from prodigy import recipe
+from prodigy.util import set_hashes
 from prodigy.components.stream import get_stream
 from prodigy.recipes.image import image_manual
 
 from prodigy_ann.util import batched, setup_index, load_index, new_example_stream
 
+
+def remove_images(examples):
+    # Remove all data URIs before storing example in the database
+    for eg in examples:
+        if eg["image"].startswith("data:"):
+            del eg["image"]
+        del eg["text"]
+        yield set_hashes(eg)
 
 @recipe(
     "ann.image.index",
@@ -24,7 +34,8 @@ def image_index(source: Path, index_path: Path):
     """Builds an HSNWLIB index on example text data."""
     # Store sentences as a list, not perfect, but works.
     stream = get_stream(source)
-    print(next(stream))
+    stream.apply(remove_images)
+    examples = list(stream)
 
     # Setup index
     model = SentenceTransformer('clip-ViT-B-32')
@@ -33,7 +44,7 @@ def image_index(source: Path, index_path: Path):
     # Index everything, progbar and save
     iter_examples = tqdm(examples, desc="indexing")
     for batch in batched(iter_examples, n=256):
-        embeddings = model.encode(batch)
+        embeddings = model.encode([Image.open(ex['path']) for ex in batch])
         index.add_items(embeddings)
 
     # Hnswlib demands a string as an output path
@@ -56,7 +67,9 @@ def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: i
         raise ValueError("must pass query")
 
     # Store sentences as a list, not perfect, but works.
-    examples = [ex["text"] for ex in srsly.read_jsonl(source)]
+    stream = get_stream(source)
+    stream.apply(remove_images)
+    examples = list(stream)
 
     # Setup index
     model = SentenceTransformer('clip-ViT-B-32')
@@ -91,29 +104,29 @@ def ner_ann_manual(
         image_manual(dataset, nlp, stream, label=labels)
 
 
-@recipe(
-    "image.ann.clf",
-    # fmt: off
-    dataset=("Dataset to save answers to", "positional", None, str),
-    nlp=("spaCy model to load", "positional", None, str),
-    examples=("Examples that have been indexed", "positional", None, str),
-    index_path=("Path to trained index", "positional", None, Path),
-    labels=("Comma seperated labels to use", "option", "l", str),
-    patterns=("Path to match patterns file", "option", "pt", Path),
-    query=("ANN query to run", "option", "q", str),
-    # fmt: on
-)
-def image_ann_manual(
-        dataset: str,
-        nlp: str,
-        examples: Path,
-        index_path: Path,
-        labels: str,
-        query: str,
-        patterns: Optional[Path] = None,
-):
-    """Run spans.manual using a query to populate the stream."""
-    with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
-        image_fetch(examples, index_path, out_path=tmpfile.name, query=query)
-        stream = list(srsly.read_jsonl(tmpfile.name))
-        spans_manual(dataset, nlp, stream, label=labels, patterns=patterns)
+# @recipe(
+#     "image.ann.clf",
+#     # fmt: off
+#     dataset=("Dataset to save answers to", "positional", None, str),
+#     nlp=("spaCy model to load", "positional", None, str),
+#     examples=("Examples that have been indexed", "positional", None, str),
+#     index_path=("Path to trained index", "positional", None, Path),
+#     labels=("Comma seperated labels to use", "option", "l", str),
+#     patterns=("Path to match patterns file", "option", "pt", Path),
+#     query=("ANN query to run", "option", "q", str),
+#     # fmt: on
+# )
+# def image_ann_manual(
+#         dataset: str,
+#         nlp: str,
+#         examples: Path,
+#         index_path: Path,
+#         labels: str,
+#         query: str,
+#         patterns: Optional[Path] = None,
+# ):
+#     """Run spans.manual using a query to populate the stream."""
+#     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
+#         image_fetch(examples, index_path, out_path=tmpfile.name, query=query)
+#         stream = list(srsly.read_jsonl(tmpfile.name))
+#         image_manual(dataset, nlp, stream, label=labels, patterns=patterns)
