@@ -66,33 +66,7 @@ def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: i
 
 
 @recipe(
-    "textcat.ann.manual",
-    # fmt: off
-    dataset=("Dataset to save answers to", "positional", None, str),
-    examples=("Examples that have been indexed", "positional", None, str),
-    index_path=("Path to trained index", "positional", None, Path),
-    labels=("Comma seperated labels to use", "option", "l", str),
-    query=("ANN query to run", "option", "q", str),
-    exclusive=("Labels are exclusive", "flag", "e", bool),
-    # fmt: on
-)
-def textcat_ann_manual(
-        dataset: str,
-        examples: Path,
-        index_path: Path,
-        labels: str,
-        query: str,
-        exclusive: bool = False
-):
-    """Run textcat.manual using a query to populate the stream."""
-    with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
-        image_fetch(examples, index_path, out_path=tmpfile.name, query=query)
-        stream = list(srsly.read_jsonl(tmpfile.name))
-        return textcat_manual(dataset, stream, label=labels.split(","), exclusive=exclusive)
-
-
-@recipe(
-    "ner.ann.manual",
+    "image.ann.manual",
     # fmt: off
     dataset=("Dataset to save answers to", "positional", None, str),
     nlp=("spaCy model to load", "positional", None, str),
@@ -114,11 +88,11 @@ def ner_ann_manual(
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
         image_fetch(examples, index_path, out_path=tmpfile.name, query=query)
         stream = list(srsly.read_jsonl(tmpfile.name))
-        ner_manual(dataset, nlp, stream, label=labels)
+        image_manual(dataset, nlp, stream, label=labels)
 
 
 @recipe(
-    "spans.ann.manual",
+    "image.ann.clf",
     # fmt: off
     dataset=("Dataset to save answers to", "positional", None, str),
     nlp=("spaCy model to load", "positional", None, str),
@@ -129,7 +103,7 @@ def ner_ann_manual(
     query=("ANN query to run", "option", "q", str),
     # fmt: on
 )
-def spans_ann_manual(
+def image_ann_manual(
         dataset: str,
         nlp: str,
         examples: Path,
