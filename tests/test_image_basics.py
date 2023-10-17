@@ -1,26 +1,25 @@
-import spacy 
 import srsly 
 from pathlib import Path 
-from prodigy_ann.text import text_index, text_fetch, textcat_ann_manual, ner_ann_manual, spans_ann_manual
+from prodigy_ann.image import image_fetch, image_ann_manual, image_index
 
 
 def test_basics(tmpdir):
-    examples_path = Path("tests/datasets/new-dataset.jsonl")
+    examples_path = Path("tests/datasets/images")
     index_path = tmpdir / "new-dataset.index"
-    fetch_path = tmpdir / "fetched.jsonl"
-    query = "benchmarks"
+    fetch_path = tmpdir / "out.jsonl"
+    query = "laptop"
 
     # Ensure fetch works as expected
-    text_index(examples_path, index_path)
-    text_fetch(examples_path, index_path, fetch_path, query="benchmarks")
+    image_index(examples_path, index_path)
+    image_fetch(examples_path, index_path, fetch_path, query="laptop", n=4)
     
     fetched_examples = list(srsly.read_jsonl(fetch_path))
     for ex in fetched_examples:
-        assert ex['meta']['query'] == 'benchmarks'
+        assert ex['meta']['query'] == query
+        assert query in ex['path']
 
-    # Also ensure the helpers do not break
-    nlp = spacy.blank("en")
-    textcat_ann_manual("xxx", examples_path, index_path, labels="foo,bar", query=query)
-    ner_ann_manual("xxx", nlp, examples_path, index_path, labels="foo,bar", query=query)
-    spans_ann_manual("xxx", nlp, examples_path, index_path, labels="foo,bar", query=query)
-
+    # Also ensure the helpers do not break, this is a smoke-check
+    out = image_ann_manual("xxx", examples_path, index_path, labels="laptop", query=query, n=4)
+    for ex in out['stream']:
+        assert ex['meta']['query'] == query
+        assert query in ex['path']

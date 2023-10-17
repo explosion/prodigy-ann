@@ -16,7 +16,7 @@ def test_basics(tmpdir):
     
     fetched_examples = list(srsly.read_jsonl(fetch_path))
     for ex in fetched_examples:
-        assert ex['meta']['query'] == 'benchmarks'
+        assert ex['meta']['query'] == query
 
     # Also ensure the helpers do not break
     nlp = spacy.blank("en")
