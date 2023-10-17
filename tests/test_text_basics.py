@@ -20,7 +20,10 @@ def test_basics(tmpdir):
 
     # Also ensure the helpers do not break
     nlp = spacy.blank("en")
-    textcat_ann_manual("xxx", examples_path, index_path, labels="foo,bar", query=query)
-    ner_ann_manual("xxx", nlp, examples_path, index_path, labels="foo,bar", query=query)
-    spans_ann_manual("xxx", nlp, examples_path, index_path, labels="foo,bar", query=query)
+    out = textcat_ann_manual("xxx", examples_path, index_path, labels="foo,bar", query=query)
+    assert isinstance(out, dict)
+    out = ner_ann_manual("xxx", nlp, examples_path, index_path, labels="foo,bar", query=query)
+    assert isinstance(out, dict)
+    out = spans_ann_manual("xxx", nlp, examples_path, index_path, labels="foo,bar", query=query)
+    assert isinstance(out, dict)
 
