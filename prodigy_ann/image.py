@@ -1,6 +1,5 @@
 from tempfile import NamedTemporaryFile
 from pathlib import Path
-from typing import Optional
 
 import srsly
 from sentence_transformers import SentenceTransformer
@@ -12,7 +11,7 @@ from prodigy.util import set_hashes
 from prodigy.components.stream import get_stream
 from prodigy.recipes.image import image_manual
 
-from prodigy_ann.util import batched, setup_index, load_index, new_example_stream
+from prodigy_ann.util import batched, setup_index, load_index, new_image_example_stream
 
 
 def remove_images(examples):
@@ -20,7 +19,6 @@ def remove_images(examples):
     for eg in examples:
         if eg["image"].startswith("data:"):
             del eg["image"]
-        del eg["text"]
         yield set_hashes(eg)
 
 @recipe(
@@ -54,14 +52,15 @@ def image_index(source: Path, index_path: Path):
 @recipe(
     "ann.image.fetch",
     # fmt: off
-    source=("Path to text source that has been indexed", "positional", None, str),
+    source=("Path to image source that has been indexed", "positional", None, str),
     index_path=("Path to index", "positional", None, Path),
     out_path=("Path to write examples into", "positional", None, Path),
     query=("ANN query to run", "option", "q", str),
     n=("Number of results to return", "option", "n", int),
+    remove_base64=("Remove base64-encoded image data", "flag", "R", bool)
     # fmt: on
 )
-def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: int = 200):
+def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: int = 200, remove_base64:bool=False):
     """Fetch a relevant subset using a HNSWlib index."""
     if not query:
         raise ValueError("must pass query")
@@ -74,8 +73,15 @@ def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: i
     # Setup index
     model = SentenceTransformer('clip-ViT-B-32')
     index = load_index(model, size=len(examples), path=index_path)
-    stream = new_example_stream(examples, index, query=query, model=model, n=n)
+    stream = new_image_example_stream(examples, index, query=query, model=model, n=n)
+    if remove_base64:
+        stream = remove_images(stream)
     srsly.write_jsonl(out_path, stream)
+
+    # Return stream to make downstreams recipes easy to create
+    examples = new_image_example_stream(examples, index, query=query, model=model, n=n)
+    return get_stream(examples)
+
 
 
 @recipe(
@@ -99,34 +105,5 @@ def image_ann_manual(
 ):
     """Run image.manual using a query to populate the stream."""
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
-        image_fetch(examples, index_path, out_path=tmpfile.name, query=query, n=n)
-        stream = get_stream(tmpfile.name)
-        return image_manual(dataset, stream, label=labels)
-
-
-# @recipe(
-#     "image.ann.clf",
-#     # fmt: off
-#     dataset=("Dataset to save answers to", "positional", None, str),
-#     nlp=("spaCy model to load", "positional", None, str),
-#     examples=("Examples that have been indexed", "positional", None, str),
-#     index_path=("Path to trained index", "positional", None, Path),
-#     labels=("Comma seperated labels to use", "option", "l", str),
-#     patterns=("Path to match patterns file", "option", "pt", Path),
-#     query=("ANN query to run", "option", "q", str),
-#     # fmt: on
-# )
-# def image_ann_manual(
-#         dataset: str,
-#         nlp: str,
-#         examples: Path,
-#         index_path: Path,
-#         labels: str,
-#         query: str,
-#         patterns: Optional[Path] = None,
-# ):
-#     """Run spans.manual using a query to populate the stream."""
-#     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
-#         image_fetch(examples, index_path, out_path=tmpfile.name, query=query)
-#         stream = list(srsly.read_jsonl(tmpfile.name))
-#         image_manual(dataset, nlp, stream, label=labels, patterns=patterns)
+        stream = image_fetch(examples, index_path, out_path=tmpfile.name, query=query, n=n)
+        return image_manual(dataset, source=stream, loader="images", label=labels.split(","))

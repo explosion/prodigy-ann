@@ -1,3 +1,8 @@
+from typing import Dict
+import base64
+from io import BytesIO
+from PIL import Image
+
 import itertools as it
 from pathlib import Path
 from typing import List
@@ -45,4 +50,33 @@ def new_example_stream(
             "text": str(examples[int(lab)]),
             "meta": {"distance": float(dist), "query": query}
         }
+        yield ex
+
+
+def base64_image(example: Dict) -> str:
+    """Turns a PdfPage into a base64 image for Prodigy"""
+    pil_image = Image.open(example['path']).convert('RGB')
+    with BytesIO() as buffered:
+        pil_image.save(buffered, format="JPEG")
+        img_str = base64.b64encode(buffered.getvalue())
+    return f"data:image/png;base64,{img_str.decode('utf-8')}"
+
+
+def new_image_example_stream(
+        examples: List[str],
+        index:Index,
+        query:str,
+        model:SentenceTransformer,
+        n:int=200
+    ):
+    """New generator based on query/index/model."""
+    embedding = model.encode([query])[0]
+    items, distances = index.knn_query([embedding], k=n)
+
+    for lab, dist in zip(items[0].tolist(), distances[0].tolist()):
+        ex = {
+            **examples[int(lab)],
+            "meta": {"distance": float(dist), "query": query},
+        }
+        ex['image'] = base64_image(ex)
         yield ex
