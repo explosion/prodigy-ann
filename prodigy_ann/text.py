@@ -114,7 +114,7 @@ def ner_ann_manual(
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
         text_fetch(examples, index_path, out_path=tmpfile.name, query=query)
         stream = list(srsly.read_jsonl(tmpfile.name))
-        ner_manual(dataset, nlp, stream, label=labels)
+        return ner_manual(dataset, nlp, stream, label=labels)
 
 
 @recipe(
@@ -142,4 +142,4 @@ def spans_ann_manual(
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
         text_fetch(examples, index_path, out_path=tmpfile.name, query=query)
         stream = list(srsly.read_jsonl(tmpfile.name))
-        spans_manual(dataset, nlp, stream, label=labels, patterns=patterns)
+        return spans_manual(dataset, nlp, stream, label=labels, patterns=patterns)
