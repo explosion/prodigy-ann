@@ -92,6 +92,7 @@ def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: i
     index_path=("Path to trained index", "positional", None, Path),
     labels=("Comma seperated labels to use", "option", "l", str),
     query=("ANN query to run", "option", "q", str),
+    remove_base64=("Remove base64-encoded image data", "flag", "R", bool),
     n=("Number of results to return", "option", "n", int),
     # fmt: on
 )
@@ -101,9 +102,10 @@ def image_ann_manual(
         index_path: Path,
         labels: str,
         query: str,
+        remove_base64: bool = False,
         n: int = 100
 ):
     """Run image.manual using a query to populate the stream."""
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
         stream = image_fetch(examples, index_path, out_path=tmpfile.name, query=query, n=n)
-        return image_manual(dataset, source=stream, loader="images", label=labels.split(","))
+        return image_manual(dataset, source=stream, loader="images", label=labels.split(","), remove_base64=remove_base64)
