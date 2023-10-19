@@ -19,11 +19,15 @@ def test_basics(tmpdir):
         assert ex['meta']['query'] == query
 
     # Also ensure the helpers do not break
-    nlp = spacy.blank("en")
     out = textcat_ann_manual("xxx", examples_path, index_path, labels="foo,bar", query=query)
     assert isinstance(out, dict)
-    out = ner_ann_manual("xxx", nlp, examples_path, index_path, labels="foo,bar", query=query)
+    assert next(out['stream'])
+
+    out = ner_ann_manual("xxx", "blank:en", examples_path, index_path, labels="foo,bar", query=query)
     assert isinstance(out, dict)
-    out = spans_ann_manual("xxx", nlp, examples_path, index_path, labels="foo,bar", query=query)
+    assert next(out['stream'])
+    
+    out = spans_ann_manual("xxx", "blank:en", examples_path, index_path, labels="foo,bar", query=query)
     assert isinstance(out, dict)
+    assert next(out['stream'])
 
