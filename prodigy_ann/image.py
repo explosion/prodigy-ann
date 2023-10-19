@@ -25,7 +25,7 @@ def remove_images(examples):
     "ann.image.index",
     # fmt: off
     source=("Path to text source to index", "positional", None, str),
-    index_path=("Path of trained index", "positional", None, Path),
+    index_path=("Path to output the trained index", "positional", None, Path),
     # fmt: on
 )
 def image_index(source: Path, index_path: Path):
