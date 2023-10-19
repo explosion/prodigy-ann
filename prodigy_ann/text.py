@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional
 
 import srsly
+import spacy 
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
@@ -111,10 +112,14 @@ def ner_ann_manual(
     query:str,
 ):
     """Run ner.manual using a query to populate the stream."""
+    if "blank" in nlp:
+        spacy_mod = spacy.blank(nlp.replace("blank:", ""))
+    else:
+        spacy_mod = spacy.load(nlp)
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
         text_fetch(examples, index_path, out_path=tmpfile.name, query=query)
         stream = list(srsly.read_jsonl(tmpfile.name))
-        return ner_manual(dataset, nlp, stream, label=labels)
+        return ner_manual(dataset, spacy_mod, stream, label=labels.split(","))
 
 
 @recipe(
@@ -139,7 +144,11 @@ def spans_ann_manual(
     patterns: Optional[Path] = None,
 ):
     """Run spans.manual using a query to populate the stream."""
+    if "blank" in nlp:
+        spacy_mod = spacy.blank(nlp.replace("blank:", ""))
+    else:
+        spacy_mod = spacy.load(nlp)
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
         text_fetch(examples, index_path, out_path=tmpfile.name, query=query)
         stream = list(srsly.read_jsonl(tmpfile.name))
-        return spans_manual(dataset, nlp, stream, label=labels, patterns=patterns)
+        return spans_manual(dataset, spacy_mod, stream, label=labels.split(","), patterns=patterns)
