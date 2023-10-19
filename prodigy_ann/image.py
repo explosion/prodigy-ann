@@ -41,7 +41,7 @@ def image_index(source: Path, index_path: Path):
 
     # Index everything, progbar and save
     iter_examples = tqdm(examples, desc="indexing")
-    for batch in batched(iter_examples, n=256):
+    for batch in batched(iter_examples, n=64):
         embeddings = model.encode([Image.open(ex['path']) for ex in batch])
         index.add_items(embeddings)
 
