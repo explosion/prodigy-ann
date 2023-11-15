@@ -1,6 +1,6 @@
 from tempfile import NamedTemporaryFile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import srsly
 import spacy 
@@ -8,12 +8,58 @@ from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
 from prodigy import recipe
+from prodigy.util import log
+from prodigy.components.stream import Stream
 from prodigy.recipes.textcat import manual as textcat_manual
 from prodigy.recipes.ner import manual as ner_manual
 from prodigy.recipes.spans import manual as spans_manual
 
 from prodigy_ann.util import batched, setup_index, load_index, new_example_stream
 
+HTML = """
+<link
+  rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.2/css/all.min.css"
+  integrity="sha512-1sCRPdkRXhBV2PBLUdRb4tMg1w2YPf37qatUFeS7zlBy7jJI8Lf4VHwWfZZfpXtYSLy85pkm9GaYVYMfw5BC1A=="
+  crossorigin="anonymous"
+  referrerpolicy="no-referrer"
+/>
+<details>
+    <summary>Reset stream?</summary>
+    <label for="query">New query:</label>
+    <input type="text" id="query" name="query">
+    <br>
+    <button id="refreshButton" onclick="refreshData()">
+        Refresh Stream
+        <i
+            id="loadingIcon"
+            class="fa-solid fa-spinner fa-spin"
+            style="display: none;"
+        ></i>
+    </button>
+</details>
+
+"""
+
+JS = """
+function refreshData() {
+  document.querySelector('#loadingIcon').style.display = 'inline-block'
+  event_data = {
+    example: window.prodigy.content,
+    query: document.getElementById("query").value 
+  }
+  window.prodigy
+    .event('stream-reset', event_data)
+    .then(updated_example => {
+      console.log('Updating Current Example with new data:', updated_example)
+      window.prodigy.update(updated_example)
+      document.querySelector('#loadingIcon').style.display = 'none'
+    })
+    .catch(err => {
+      console.error('Error in Event Handler:', err)
+    })
+}
+"""
 
 @recipe(
     "ann.text.index",
@@ -39,6 +85,13 @@ def text_index(source: Path, index_path: Path):
     
     # Hnswlib demands a string as an output path
     index.save_index(str(index_path))
+
+
+def query_subset(source: Path, index_path: Path, query:str, n:int=200) -> List[str]:
+    examples = [ex["text"] for ex in srsly.read_jsonl(source)]
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    index = load_index(model, size=len(examples), path=index_path)
+    return new_example_stream(examples, index, query=query, model=model, n=n)
 
 
 @recipe(
@@ -89,7 +142,25 @@ def textcat_ann_manual(
     with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
         text_fetch(examples, index_path, out_path=tmpfile.name, query=query)
         stream = list(srsly.read_jsonl(tmpfile.name))
-        return textcat_manual(dataset, stream, label=labels.split(","), exclusive=exclusive)
+        components = textcat_manual(dataset, stream, label=labels.split(","), exclusive=exclusive)
+    
+    def stream_reset(ctrl, *, example: dict, query: str):
+        log(f"RECIPE: Stream reset with query: {query}")
+        new_examples = query_subset(examples, index_path, query=query, n=200)
+        ctrl.stream = Stream.from_iterable(new_examples)
+        return next(ctrl.stream)
+    
+    blocks = [
+        {"view_id": components["view_id"]}, 
+        {"view_id": "html", "html_template": HTML}
+    ]
+    components["event_hooks"] = {
+        "stream-reset": stream_reset
+    }
+    components["view_id"] = "blocks"
+    components["config"]["javascript"] = JS
+    components["config"]["blocks"] = blocks
+    return components
 
 
 @recipe(
