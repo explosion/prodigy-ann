@@ -1,3 +1,4 @@
+import srsly 
 from typing import Dict
 import base64
 from io import BytesIO
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import List
 
 from hnswlib import Index
+from prodigy.util import set_hashes
 from sentence_transformers import SentenceTransformer
 
 
@@ -34,14 +36,10 @@ def load_index(model: SentenceTransformer, size: int, path:Path) -> Index:
     return index
 
 
-def new_example_stream(
-        examples: List[str],
-        index:Index,
-        query:str,
-        model:SentenceTransformer,
-        n:int=200
-    ):
-    """New generator based on query/index/model."""
+def new_text_example_stream(source: Path, index_path: Path, query:str, n:int=200) -> List[str]:
+    examples = [ex["text"] for ex in srsly.read_jsonl(source)]
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    index = load_index(model, size=len(examples), path=index_path)
     embedding = model.encode([query])[0]
     items, distances = index.knn_query([embedding], k=n)
 
@@ -50,7 +48,7 @@ def new_example_stream(
             "text": str(examples[int(lab)]),
             "meta": {"distance": float(dist), "query": query}
         }
-        yield ex
+        yield set_hashes(ex)
 
 
 def base64_image(example: Dict) -> str:

@@ -1,6 +1,7 @@
+import textwrap 
 from tempfile import NamedTemporaryFile
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 import srsly
 import spacy 
@@ -14,7 +15,7 @@ from prodigy.recipes.textcat import manual as textcat_manual
 from prodigy.recipes.ner import manual as ner_manual
 from prodigy.recipes.spans import manual as spans_manual
 
-from prodigy_ann.util import batched, setup_index, load_index, new_example_stream
+from prodigy_ann.util import batched, setup_index, load_index, new_text_example_stream
 
 HTML = """
 <link
@@ -25,27 +26,61 @@ HTML = """
   referrerpolicy="no-referrer"
 />
 <details>
-    <summary>Reset stream?</summary>
-    <label for="query">New query:</label>
-    <input type="text" id="query" name="query">
-    <br>
-    <button id="refreshButton" onclick="refreshData()">
-        Refresh Stream
-        <i
-            id="loadingIcon"
-            class="fa-solid fa-spinner fa-spin"
-            style="display: none;"
-        ></i>
-    </button>
+    <summary id="reset">Reset stream?</summary>
+    <div class="prodigy-content">
+        <label class="label" for="query">New query for ANN:</label>
+        <input class="prodigy-text-input text-input" type="text" id="query" name="query" value="">
+        <br><br>
+        <button id="refreshButton" onclick="refreshData()">
+            Refresh Stream
+            <i
+                id="loadingIcon"
+                class="fa-solid fa-spinner fa-spin"
+                style="display: none;"
+            ></i>
+        </button>
+    </div>
 </details>
+"""
 
+# We need to dedent in order to prevent a bunch of whitespaces to appear.
+HTML = textwrap.dedent(HTML).replace("\n", "")
+
+CSS = """
+.inner-div{
+  border: 1px solid #ddd;
+  text-align: left;
+  border-radius: 4px;
+}
+
+.label{
+  top: -3px;
+  opacity: 0.75;
+  position: relative;
+  font-size: 12px;
+  font-weight: bold;
+  padding-left: 10px;
+}
+
+.text-input{
+  width: 100%;
+  border: 1px solid #cacaca;
+  border-radius: 5px;
+  padding: 10px;
+  font-size: 20px;
+  background: transparent;
+  font-family: "Lato", "Trebuchet MS", Roboto, Helvetica, Arial, sans-serif;
+}
+
+#reset{
+  font-size: 16px;
+}
 """
 
 JS = """
 function refreshData() {
   document.querySelector('#loadingIcon').style.display = 'inline-block'
   event_data = {
-    example: window.prodigy.content,
     query: document.getElementById("query").value 
   }
   window.prodigy
@@ -87,11 +122,13 @@ def text_index(source: Path, index_path: Path):
     index.save_index(str(index_path))
 
 
-def query_subset(source: Path, index_path: Path, query:str, n:int=200) -> List[str]:
-    examples = [ex["text"] for ex in srsly.read_jsonl(source)]
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    index = load_index(model, size=len(examples), path=index_path)
-    return new_example_stream(examples, index, query=query, model=model, n=n)
+def stream_reset_calback(examples, index_path):
+    def stream_reset(ctrl, *, query: str):
+        log(f"RECIPE: Stream reset with query: {query}")
+        new_examples = new_text_example_stream(examples, index_path, query=query, n=200)
+        ctrl.stream = Stream.from_iterable(new_examples)
+        return next(ctrl.stream)
+    return stream_reset
 
 
 @recipe(
@@ -115,7 +152,7 @@ def text_fetch(source: Path, index_path: Path, out_path: Path, query:str, n:int=
     # Setup index
     model = SentenceTransformer('all-MiniLM-L6-v2')
     index = load_index(model, size=len(examples), path=index_path)
-    stream = new_example_stream(examples, index, query=query, model=model, n=n)
+    stream = new_text_example_stream(examples, index, query=query, model=model, n=n)
     srsly.write_jsonl(out_path, stream)
 
 
@@ -128,6 +165,7 @@ def text_fetch(source: Path, index_path: Path, out_path: Path, query:str, n:int=
     labels=("Comma seperated labels to use", "option", "l", str),
     query=("ANN query to run", "option", "q", str),
     exclusive=("Labels are exclusive", "flag", "e", bool),
+    allow_reset=("Allow the user to restart the query", "option", "r", bool)
     # fmt: on
 )
 def textcat_ann_manual(
@@ -136,30 +174,27 @@ def textcat_ann_manual(
     index_path: Path,
     labels:str,
     query:str,
-    exclusive:bool = False
+    exclusive:bool = False,
+    allow_reset: bool = False
 ):
     """Run textcat.manual using a query to populate the stream."""
-    with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
-        text_fetch(examples, index_path, out_path=tmpfile.name, query=query)
-        stream = list(srsly.read_jsonl(tmpfile.name))
-        components = textcat_manual(dataset, stream, label=labels.split(","), exclusive=exclusive)
+
+    stream = new_text_example_stream(examples, index_path, query)
+    components = textcat_manual(dataset, stream, label=labels.split(","), exclusive=exclusive)
     
-    def stream_reset(ctrl, *, example: dict, query: str):
-        log(f"RECIPE: Stream reset with query: {query}")
-        new_examples = query_subset(examples, index_path, query=query, n=200)
-        ctrl.stream = Stream.from_iterable(new_examples)
-        return next(ctrl.stream)
-    
-    blocks = [
-        {"view_id": components["view_id"]}, 
-        {"view_id": "html", "html_template": HTML}
-    ]
-    components["event_hooks"] = {
-        "stream-reset": stream_reset
-    }
-    components["view_id"] = "blocks"
-    components["config"]["javascript"] = JS
-    components["config"]["blocks"] = blocks
+    # Only update the components if the user wants to allow the user to reset the stream
+    if allow_reset:
+        blocks = [
+            {"view_id": components["view_id"]}, 
+            {"view_id": "html", "html_template": HTML}
+        ]
+        components["event_hooks"] = {
+            "stream-reset": stream_reset_calback(examples, index_path)
+        }
+        components["view_id"] = "blocks"
+        components["config"]["javascript"] = JS
+        components["config"]["global_css"] = CSS
+        components["config"]["blocks"] = blocks
     return components
 
 
