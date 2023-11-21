@@ -1,4 +1,3 @@
-from tempfile import NamedTemporaryFile
 from pathlib import Path
 
 import srsly
@@ -7,19 +6,12 @@ from tqdm import tqdm
 from PIL import Image
 
 from prodigy import recipe
-from prodigy.util import set_hashes
+from prodigy.util import set_hashes, log
 from prodigy.components.stream import get_stream
 from prodigy.recipes.image import image_manual
 
-from prodigy_ann.util import batched, setup_index, load_index, new_image_example_stream
+from prodigy_ann.util import batched, setup_index, remove_images, new_image_example_stream
 
-
-def remove_images(examples):
-    # Remove all data URIs before storing example in the database
-    for eg in examples:
-        if eg["image"].startswith("data:"):
-            del eg["image"]
-        yield set_hashes(eg)
 
 @recipe(
     "ann.image.index",
@@ -31,6 +23,7 @@ def remove_images(examples):
 def image_index(source: Path, index_path: Path):
     """Builds an HSNWLIB index on example text data."""
     # Store sentences as a list, not perfect, but works.
+    log("RECIPE: Calling `ann.image.index`")
     stream = get_stream(source)
     stream.apply(remove_images)
     examples = list(stream)
@@ -47,6 +40,7 @@ def image_index(source: Path, index_path: Path):
 
     # Hnswlib demands a string as an output path
     index.save_index(str(index_path))
+    log(f"RECIPE: Index stored at {index_path}")
 
 
 @recipe(
@@ -62,6 +56,7 @@ def image_index(source: Path, index_path: Path):
 )
 def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: int = 200, remove_base64:bool=False):
     """Fetch a relevant subset using a HNSWlib index."""
+    log("RECIPE: Calling `ann.image.fetch`")
     if not query:
         raise ValueError("must pass query")
 
@@ -71,24 +66,18 @@ def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: i
     examples = list(stream)
 
     # Setup index
-    model = SentenceTransformer('clip-ViT-B-32')
-    index = load_index(model, size=len(examples), path=index_path)
-    stream = new_image_example_stream(examples, index, query=query, model=model, n=n)
+    stream = new_image_example_stream(examples, index_path, query=query, n=n)
     if remove_base64:
         stream = remove_images(stream)
     srsly.write_jsonl(out_path, stream)
-
-    # Return stream to make downstreams recipes easy to create
-    examples = new_image_example_stream(examples, index, query=query, model=model, n=n)
-    return get_stream(examples)
-
+    log(f"RECIPE: New stream stored at {out_path}")
 
 
 @recipe(
     "image.ann.manual",
     # fmt: off
     dataset=("Dataset to save answers to", "positional", None, str),
-    examples=("Examples that have been indexed", "positional", None, str),
+    source=("Examples that have been indexed", "positional", None, str),
     index_path=("Path to trained index", "positional", None, Path),
     labels=("Comma seperated labels to use", "option", "l", str),
     query=("ANN query to run", "option", "q", str),
@@ -98,7 +87,7 @@ def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: i
 )
 def image_ann_manual(
         dataset: str,
-        examples: Path,
+        source: Path,
         index_path: Path,
         labels: str,
         query: str,
@@ -106,6 +95,5 @@ def image_ann_manual(
         n: int = 100
 ):
     """Run image.manual using a query to populate the stream."""
-    with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
-        stream = image_fetch(examples, index_path, out_path=tmpfile.name, query=query, n=n)
-        return image_manual(dataset, source=stream, loader="images", label=labels.split(","), remove_base64=remove_base64)
+    new_stream = new_image_example_stream(source, index_path, query=query, n=n)
+    return image_manual(dataset, source=new_stream, loader="images", label=labels.split(","), remove_base64=remove_base64)

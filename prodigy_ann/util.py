@@ -1,18 +1,17 @@
-import textwrap 
-import srsly 
-from typing import Dict
 import base64
 from io import BytesIO
-from PIL import Image
-
 import itertools as it
 from pathlib import Path
-from typing import List
+from typing import List, Dict
+import textwrap
 
+import srsly 
+from PIL import Image
+from sentence_transformers import SentenceTransformer
 from hnswlib import Index
 from prodigy.util import set_hashes
 from prodigy.util import log
-from sentence_transformers import SentenceTransformer
+from prodigy.components.stream import get_stream
 
 
 HTML = """
@@ -110,7 +109,7 @@ def setup_index(model: SentenceTransformer, size:int) -> Index:
     return index
 
 
-def load_index(model: SentenceTransformer, size: int, path:Path) -> Index:
+def load_index(path:Path, model: SentenceTransformer, size: int) -> Index:
     out = model.encode(["Test text right here."])
     index = Index(space="cosine", dim=out.shape[1])
     index.load_index(str(path), max_elements=size)
@@ -123,7 +122,7 @@ def new_text_example_stream(source: Path, index_path: Path, query:str, n:int=200
     log(f"RECIPE: Generating new stream from {source} and {index_path}.")
     examples = [ex for ex in srsly.read_jsonl(source)]
     model = SentenceTransformer('all-MiniLM-L6-v2')
-    index = load_index(model, size=len(examples), path=index_path)
+    index = load_index(path=index_path, model=model, size=len(examples))
     embedding = model.encode([query])[0]
     items, distances = index.knn_query([embedding], k=n)
 
@@ -150,15 +149,28 @@ def base64_image(example: Dict) -> str:
     return f"data:image/png;base64,{img_str.decode('utf-8')}"
 
 
+def remove_images(examples):
+    # Remove all data URIs before storing example in the database
+    for eg in examples:
+        if eg.get("image", "").startswith("data:"):
+            del eg["image"]
+        yield set_hashes(eg)
+
+
 def new_image_example_stream(
-        examples: List[str],
-        index:Index,
+        source: Path,
+        index_path:Index,
         query:str,
-        model:SentenceTransformer,
         n:int=200
     ):
     """New generator based on query/index/model."""
+    stream = get_stream(source)
+    stream.apply(remove_images)
+    examples = [ex for ex in stream]
+
+    model = SentenceTransformer('clip-ViT-B-32')
     embedding = model.encode([query])[0]
+    index = load_index(path=index_path, model=model, size=len(examples))
     items, distances = index.knn_query([embedding], k=n)
 
     for lab, dist in zip(items[0].tolist(), distances[0].tolist()):
