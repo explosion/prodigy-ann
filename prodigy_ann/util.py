@@ -37,17 +37,23 @@ def load_index(model: SentenceTransformer, size: int, path:Path) -> Index:
 
 
 def new_text_example_stream(source: Path, index_path: Path, query:str, n:int=200) -> List[str]:
-    examples = [ex["text"] for ex in srsly.read_jsonl(source)]
+    examples = [ex for ex in srsly.read_jsonl(source)]
     model = SentenceTransformer('all-MiniLM-L6-v2')
     index = load_index(model, size=len(examples), path=index_path)
     embedding = model.encode([query])[0]
     items, distances = index.knn_query([embedding], k=n)
 
     for lab, dist in zip(items[0].tolist(), distances[0].tolist()):
-        ex = {
-            "text": str(examples[int(lab)]),
-            "meta": {"distance": float(dist), "query": query}
-        }
+        # Get the original example
+        ex = examples[int(lab)]
+
+        # Add some extra meta info
+        ex['meta'] = ex.get("meta", {})
+        ex['meta']['index'] = int(lab)
+        ex['meta']['distance'] = float(dist)
+        ex['meta']["query"] = query
+
+        # Don't forget hashes
         yield set_hashes(ex)
 
 
