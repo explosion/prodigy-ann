@@ -1,4 +1,3 @@
-import textwrap 
 from pathlib import Path
 from typing import Optional
 
@@ -14,86 +13,8 @@ from prodigy.recipes.textcat import manual as textcat_manual
 from prodigy.recipes.ner import manual as ner_manual
 from prodigy.recipes.spans import manual as spans_manual
 
-from prodigy_ann.util import batched, setup_index, new_text_example_stream
+from prodigy_ann.util import batched, setup_index, new_text_example_stream, HTML, JS, CSS
 
-HTML = """
-<link
-  rel="stylesheet"
-  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.2/css/all.min.css"
-  integrity="sha512-1sCRPdkRXhBV2PBLUdRb4tMg1w2YPf37qatUFeS7zlBy7jJI8Lf4VHwWfZZfpXtYSLy85pkm9GaYVYMfw5BC1A=="
-  crossorigin="anonymous"
-  referrerpolicy="no-referrer"
-/>
-<details>
-    <summary id="reset">Reset stream?</summary>
-    <div class="prodigy-content">
-        <label class="label" for="query">New query for ANN:</label>
-        <input class="prodigy-text-input text-input" type="text" id="query" name="query" value="">
-        <br><br>
-        <button id="refreshButton" onclick="refreshData()">
-            Refresh Stream
-            <i
-                id="loadingIcon"
-                class="fa-solid fa-spinner fa-spin"
-                style="display: none;"
-            ></i>
-        </button>
-    </div>
-</details>
-"""
-
-# We need to dedent in order to prevent a bunch of whitespaces to appear.
-HTML = textwrap.dedent(HTML).replace("\n", "")
-
-CSS = """
-.inner-div{
-  border: 1px solid #ddd;
-  text-align: left;
-  border-radius: 4px;
-}
-
-.label{
-  top: -3px;
-  opacity: 0.75;
-  position: relative;
-  font-size: 12px;
-  font-weight: bold;
-  padding-left: 10px;
-}
-
-.text-input{
-  width: 100%;
-  border: 1px solid #cacaca;
-  border-radius: 5px;
-  padding: 10px;
-  font-size: 20px;
-  background: transparent;
-  font-family: "Lato", "Trebuchet MS", Roboto, Helvetica, Arial, sans-serif;
-}
-
-#reset{
-  font-size: 16px;
-}
-"""
-
-JS = """
-function refreshData() {
-  document.querySelector('#loadingIcon').style.display = 'inline-block'
-  event_data = {
-    query: document.getElementById("query").value 
-  }
-  window.prodigy
-    .event('stream-reset', event_data)
-    .then(updated_example => {
-      console.log('Updating Current Example with new data:', updated_example)
-      window.prodigy.update(updated_example)
-      document.querySelector('#loadingIcon').style.display = 'none'
-    })
-    .catch(err => {
-      console.error('Error in Event Handler:', err)
-    })
-}
-"""
 
 @recipe(
     "ann.text.index",
