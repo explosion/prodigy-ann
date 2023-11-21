@@ -6,11 +6,11 @@ from tqdm import tqdm
 from PIL import Image
 
 from prodigy import recipe
-from prodigy.util import set_hashes, log
-from prodigy.components.stream import get_stream
+from prodigy.util import log
+from prodigy.components.stream import get_stream, Stream
 from prodigy.recipes.image import image_manual
 
-from prodigy_ann.util import batched, setup_index, remove_images, new_image_example_stream
+from prodigy_ann.util import batched, setup_index, remove_images, new_image_example_stream, HTML, JS, CSS
 
 
 @recipe(
@@ -73,6 +73,15 @@ def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: i
     log(f"RECIPE: New stream stored at {out_path}")
 
 
+def stream_reset_calback(source, index_path, n):
+    def stream_reset(ctrl, *, query: str):
+        log(f"RECIPE: Stream reset with query: {query}")
+        new_examples = new_image_example_stream(source, index_path, query=query, n=n)
+        ctrl.stream = Stream.from_iterable(new_examples)
+        return next(ctrl.stream)
+    return stream_reset
+
+
 @recipe(
     "image.ann.manual",
     # fmt: off
@@ -83,6 +92,7 @@ def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: i
     query=("ANN query to run", "option", "q", str),
     remove_base64=("Remove base64-encoded image data", "flag", "R", bool),
     n=("Number of results to return", "option", "n", int),
+    allow_reset=("Allow the user to restart the query", "flag", "r", bool),
     # fmt: on
 )
 def image_ann_manual(
@@ -92,8 +102,23 @@ def image_ann_manual(
         labels: str,
         query: str,
         remove_base64: bool = False,
-        n: int = 100
+        n: int = 100,
+        allow_reset: bool = False,
 ):
     """Run image.manual using a query to populate the stream."""
     new_stream = new_image_example_stream(source, index_path, query=query, n=n)
-    return image_manual(dataset, source=new_stream, loader="images", label=labels.split(","), remove_base64=remove_base64)
+    components = image_manual(dataset, source=new_stream, loader="images", label=labels.split(","), remove_base64=remove_base64)
+    # Only update the components if the user wants to allow the user to reset the stream
+    if allow_reset:
+        blocks = [
+            {"view_id": components["view_id"]}, 
+            {"view_id": "html", "html_template": HTML}
+        ]
+        components["event_hooks"] = {
+            "stream-reset": stream_reset_calback(source, index_path, n)
+        }
+        components["view_id"] = "blocks"
+        components["config"]["javascript"] = JS
+        components["config"]["global_css"] = CSS
+        components["config"]["blocks"] = blocks
+    return components
