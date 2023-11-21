@@ -106,6 +106,7 @@ function refreshData() {
 def text_index(source: Path, index_path: Path):
     """Builds an HSNWLIB index on example text data."""
     # Store sentences as a list, not perfect, but works.
+    log("RECIPE: Calling `ann.text.index`")
     examples = [ex["text"] for ex in srsly.read_jsonl(source)]
 
     # Setup index
@@ -120,6 +121,7 @@ def text_index(source: Path, index_path: Path):
     
     # Hnswlib demands a string as an output path
     index.save_index(str(index_path))
+    log(f"RECIPE: Index stored in {index_path}")
 
 
 def stream_reset_calback(examples, index_path):
@@ -143,17 +145,13 @@ def stream_reset_calback(examples, index_path):
 )
 def text_fetch(source: Path, index_path: Path, out_path: Path, query:str, n:int=200):
     """Fetch a relevant subset using a HNSWlib index."""
+    log("RECIPE: Calling `ann.text.fetch`")
     if not query:
         raise ValueError("must pass query")
-    
-    # Store sentences as a list, not perfect, but works.
-    examples = [ex["text"] for ex in srsly.read_jsonl(source)]
 
-    # Setup index
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    index = load_index(model, size=len(examples), path=index_path)
-    stream = new_text_example_stream(examples, index, query=query, model=model, n=n)
+    stream = new_text_example_stream(source, index_path, query=query, n=n)
     srsly.write_jsonl(out_path, stream)
+    log(f"RECIPE: New stream stored at {out_path}")
 
 
 @recipe(
@@ -165,7 +163,7 @@ def text_fetch(source: Path, index_path: Path, out_path: Path, query:str, n:int=
     labels=("Comma seperated labels to use", "option", "l", str),
     query=("ANN query to run", "option", "q", str),
     exclusive=("Labels are exclusive", "flag", "e", bool),
-    allow_reset=("Allow the user to restart the query", "option", "r", bool)
+    allow_reset=("Allow the user to restart the query", "flag", "r", bool)
     # fmt: on
 )
 def textcat_ann_manual(
@@ -178,7 +176,7 @@ def textcat_ann_manual(
     allow_reset: bool = False
 ):
     """Run textcat.manual using a query to populate the stream."""
-
+    log("RECIPE: Calling `textcat.ann.manual`")
     stream = new_text_example_stream(examples, index_path, query)
     components = textcat_manual(dataset, stream, label=labels.split(","), exclusive=exclusive)
     
@@ -207,6 +205,7 @@ def textcat_ann_manual(
     index_path=("Path to trained index", "positional", None, Path),
     labels=("Comma seperated labels to use", "option", "l", str),
     query=("ANN query to run", "option", "q", str),
+    allow_reset=("Allow the user to restart the query", "flag", "r", bool)
     # fmt: on
 )
 def ner_ann_manual(
@@ -216,16 +215,30 @@ def ner_ann_manual(
     index_path: Path,
     labels:str,
     query:str,
+    allow_reset:bool = False,
 ):
     """Run ner.manual using a query to populate the stream."""
+    log("RECIPE: Calling `ner.ann.manual`")
     if "blank" in nlp:
         spacy_mod = spacy.blank(nlp.replace("blank:", ""))
     else:
         spacy_mod = spacy.load(nlp)
-    with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
-        text_fetch(examples, index_path, out_path=tmpfile.name, query=query)
-        stream = list(srsly.read_jsonl(tmpfile.name))
-        return ner_manual(dataset, spacy_mod, stream, label=labels.split(","))
+    stream = new_text_example_stream(examples, index_path, query)
+    # Only update the components if the user wants to allow the user to reset the stream
+    components = ner_manual(dataset, spacy_mod, stream, label=labels.split(","))
+    if allow_reset:
+        blocks = [
+            {"view_id": components["view_id"]}, 
+            {"view_id": "html", "html_template": HTML}
+        ]
+        components["event_hooks"] = {
+            "stream-reset": stream_reset_calback(examples, index_path)
+        }
+        components["view_id"] = "blocks"
+        components["config"]["javascript"] = JS
+        components["config"]["global_css"] = CSS
+        components["config"]["blocks"] = blocks
+    return components
 
 
 @recipe(
@@ -238,6 +251,7 @@ def ner_ann_manual(
     labels=("Comma seperated labels to use", "option", "l", str),
     patterns=("Path to match patterns file", "option", "pt", Path),
     query=("ANN query to run", "option", "q", str),
+    allow_reset=("Allow the user to restart the query", "flag", "r", bool)
     # fmt: on
 )
 def spans_ann_manual(
@@ -248,13 +262,27 @@ def spans_ann_manual(
     labels:str,
     query:str,
     patterns: Optional[Path] = None,
+    allow_reset: bool = False
 ):
     """Run spans.manual using a query to populate the stream."""
+    log("RECIPE: Calling `spans.ann.manual`")
     if "blank" in nlp:
         spacy_mod = spacy.blank(nlp.replace("blank:", ""))
     else:
         spacy_mod = spacy.load(nlp)
-    with NamedTemporaryFile(suffix=".jsonl") as tmpfile:
-        text_fetch(examples, index_path, out_path=tmpfile.name, query=query)
-        stream = list(srsly.read_jsonl(tmpfile.name))
-        return spans_manual(dataset, spacy_mod, stream, label=labels.split(","), patterns=patterns)
+    stream = new_text_example_stream(examples, index_path, query)
+    # Only update the components if the user wants to allow the user to reset the stream
+    components = spans_manual(dataset, spacy_mod, stream, label=labels.split(","), patterns=patterns)
+    if allow_reset:
+        blocks = [
+            {"view_id": components["view_id"]}, 
+            {"view_id": "html", "html_template": HTML}
+        ]
+        components["event_hooks"] = {
+            "stream-reset": stream_reset_calback(examples, index_path)
+        }
+        components["view_id"] = "blocks"
+        components["config"]["javascript"] = JS
+        components["config"]["global_css"] = CSS
+        components["config"]["blocks"] = blocks
+    return components

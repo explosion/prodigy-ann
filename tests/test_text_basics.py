@@ -11,7 +11,7 @@ def test_basics(tmpdir):
 
     # Ensure fetch works as expected
     text_index(examples_path, index_path)
-    text_fetch(examples_path, index_path, fetch_path, query="benchmarks")
+    text_fetch(examples_path, index_path, fetch_path, query=query)
     
     fetched_examples = list(srsly.read_jsonl(fetch_path))
     for ex in fetched_examples:

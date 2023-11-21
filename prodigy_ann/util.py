@@ -10,6 +10,7 @@ from typing import List
 
 from hnswlib import Index
 from prodigy.util import set_hashes
+from prodigy.util import log
 from sentence_transformers import SentenceTransformer
 
 
@@ -33,10 +34,13 @@ def load_index(model: SentenceTransformer, size: int, path:Path) -> Index:
     out = model.encode(["Test text right here."])
     index = Index(space="cosine", dim=out.shape[1])
     index.load_index(str(path), max_elements=size)
+    log(f"RECIPE: Loaded index from {path}")
     return index
 
 
 def new_text_example_stream(source: Path, index_path: Path, query:str, n:int=200) -> List[str]:
+    log(f"RECIPE: New query for a new stream: {query}.")
+    log(f"RECIPE: Generating new stream from {source} and {index_path}.")
     examples = [ex for ex in srsly.read_jsonl(source)]
     model = SentenceTransformer('all-MiniLM-L6-v2')
     index = load_index(model, size=len(examples), path=index_path)
