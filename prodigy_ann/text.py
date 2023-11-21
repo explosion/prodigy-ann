@@ -1,5 +1,4 @@
 import textwrap 
-from tempfile import NamedTemporaryFile
 from pathlib import Path
 from typing import Optional
 
@@ -15,7 +14,7 @@ from prodigy.recipes.textcat import manual as textcat_manual
 from prodigy.recipes.ner import manual as ner_manual
 from prodigy.recipes.spans import manual as spans_manual
 
-from prodigy_ann.util import batched, setup_index, load_index, new_text_example_stream
+from prodigy_ann.util import batched, setup_index, new_text_example_stream
 
 HTML = """
 <link
