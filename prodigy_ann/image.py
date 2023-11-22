@@ -10,7 +10,7 @@ from prodigy.util import log
 from prodigy.components.stream import get_stream, Stream
 from prodigy.recipes.image import image_manual
 
-from prodigy_ann.util import batched, setup_index, remove_images, new_image_example_stream, HTML, JS, CSS
+# from prodigy_ann.util import batched, setup_index, remove_images, new_image_example_stream, HTML, JS, CSS
 
 
 @recipe(

@@ -2,17 +2,18 @@ import base64
 from io import BytesIO
 import itertools as it
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional, Callable
 import textwrap
-
 import srsly 
+from tqdm import tqdm
 from PIL import Image
 from sentence_transformers import SentenceTransformer
 from hnswlib import Index
 from prodigy.util import set_hashes
 from prodigy.util import log
+from prodigy.components.stream import Stream
 from prodigy.components.stream import get_stream
-
+from prodigy.core import Controller
 
 HTML = """
 <link
@@ -78,7 +79,7 @@ JS = """
 function refreshData() {
   document.querySelector('#loadingIcon').style.display = 'inline-block'
   event_data = {
-    query: document.getElementById("query").value 
+    query: document.getElementById("query").value
   }
   window.prodigy
     .event('stream-reset', event_data)
@@ -102,42 +103,80 @@ def batched(iterable, n=56):
         yield batch
 
 
-def setup_index(model: SentenceTransformer, size:int) -> Index:
-    out = model.encode(["Test text right here."])
-    index = Index(space="cosine", dim=out.shape[1])
-    index.init_index(max_elements=size)
-    return index
-
-
-def load_index(path:Path, model: SentenceTransformer, size: int) -> Index:
-    out = model.encode(["Test text right here."])
-    index = Index(space="cosine", dim=out.shape[1])
-    index.load_index(str(path), max_elements=size)
-    log(f"RECIPE: Loaded index from {path}")
-    return index
-
-
-def new_text_example_stream(source: Path, index_path: Path, query:str, n:int=200) -> List[str]:
-    log(f"RECIPE: New query for a new stream: {query}.")
-    log(f"RECIPE: Generating new stream from {source} and {index_path}.")
-    examples = [ex for ex in srsly.read_jsonl(source)]
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    index = load_index(path=index_path, model=model, size=len(examples))
-    embedding = model.encode([query])[0]
-    items, distances = index.knn_query([embedding], k=n)
-
-    for lab, dist in zip(items[0].tolist(), distances[0].tolist()):
-        # Get the original example
-        ex = examples[int(lab)]
-
-        # Add some extra meta info
-        ex['meta'] = ex.get("meta", {})
-        ex['meta']['index'] = int(lab)
-        ex['meta']['distance'] = float(dist)
-        ex['meta']["query"] = query
-
-        # Don't forget hashes
+def add_hashes(examples):
+    for ex in examples:
         yield set_hashes(ex)
+
+class ApproximateIndex:
+    def __init__(self, model_name:str, source: Path, index_path: Optional[Path] = None, funcs:List[Callable]=list()):
+        log(f"INDEX: Using {model_name=} and source={str(source)}.")
+        stream = get_stream(source)
+
+        # Always add the hashes at the end to prevent warning.
+        funcs.append(add_hashes)
+        for func in funcs:
+            stream.apply(func)
+        
+        # Setup model and put everything in memory
+        self.model = SentenceTransformer(model_name)
+        self.examples = list(stream)
+        out = self.model.encode(["Test text right here."])
+        self.index = Index(space="cosine", dim=out.shape[1])
+
+        # If path is given, load from disk otherwise assume start from scratch
+        if not index_path:
+            self.index.init_index(max_elements=len(self.examples))
+        else:
+            self.index.load_index(str(index_path), max_elements=len(self.examples))
+            log(f"RECIPE: Loaded index from {index_path}")
+    
+    def build_index(self) -> "ApproximateIndex":
+        # Index everything, progbar and save
+        iter_examples = tqdm(self.examples, desc="indexing")
+        for batch in batched(iter_examples, n=256):
+            embeddings = self.model.encode(batch)
+            self.index.add_items(embeddings)
+        log(f"INDEX: Indexed {len(self.examples)} examples.")
+        return self
+
+    def store_index(self, path: Path):
+        self.index.save_index(str(path))
+        log(f"INDEX: Index file stored at {path}.")
+    
+    def new_stream(self, query:str, n:int=100, funcs:List[Callable]=list()):
+        log(f"INDEX: Creating new stream of {n} examples using {query=}.")
+        embedding = self.model.encode([query])[0]
+        items, distances = self.index.knn_query([embedding], k=n)
+        for lab, dist in zip(items[0].tolist(), distances[0].tolist()):
+            # Get the original example
+            ex = self.examples[int(lab)]
+
+            # Add some extra meta info
+            ex['meta'] = ex.get("meta", {})
+            ex['meta']['index'] = int(lab)
+            ex['meta']['distance'] = float(dist)
+            ex['meta']["query"] = query
+
+            # Apply functions
+            for func in funcs:
+                ex = func(ex)
+            # Don't forget hashes
+            yield set_hashes(ex)
+
+
+def stream_reset_calback(index_obj: ApproximateIndex, n:int=100):
+    def stream_reset(ctrl: Controller, *, query: str):
+        log(f"RECIPE: Stream reset with query: {query}")
+        new_examples = list(index_obj.new_stream(query, n=n))
+        old_wrappers = ctrl.stream._wrappers
+        ctrl.stream = Stream.from_iterable(new_examples)
+        ctrl.stream._wrappers = old_wrappers
+        for sess in ctrl.get_sessions():
+            ctrl.stream.ensure_queue(sess.id)
+        for sess in ctrl.get_sessions():
+            sess._stream = ctrl.stream
+        return next(ctrl.stream)
+    return stream_reset
 
 
 def base64_image(example: Dict) -> str:
