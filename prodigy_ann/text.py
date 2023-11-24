@@ -5,7 +5,7 @@ import srsly
 import spacy
 
 from prodigy import recipe
-from prodigy.util import log, set_hashes
+from prodigy.util import log
 from prodigy.recipes.textcat import manual as textcat_manual
 from prodigy.recipes.ner import manual as ner_manual
 from prodigy.recipes.spans import manual as spans_manual
@@ -75,10 +75,6 @@ def textcat_ann_manual(
     index = ApproximateIndex(model_name='all-MiniLM-L6-v2', source=examples, index_path=index_path)
     stream = index.new_stream(query, n=n)
     components = textcat_manual(dataset, stream, label=labels.split(","), exclusive=exclusive)
-
-    def add_hashes(examples):
-        for ex in examples:
-            yield set_hashes(ex)
     
     # Only update the components if the user wants to allow the user to reset the stream
     if allow_reset:
