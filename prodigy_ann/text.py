@@ -9,7 +9,6 @@ from prodigy.util import log, set_hashes
 from prodigy.recipes.textcat import manual as textcat_manual
 from prodigy.recipes.ner import manual as ner_manual
 from prodigy.recipes.spans import manual as spans_manual
-from prodigy.components.stream import Stream
 from prodigy_ann.util import ApproximateIndex, stream_reset_calback, HTML, JS, CSS
 
 

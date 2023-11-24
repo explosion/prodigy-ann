@@ -9,6 +9,7 @@ from prodigy import recipe
 from prodigy.util import log
 from prodigy.components.stream import get_stream, Stream
 from prodigy.recipes.image import image_manual
+from .util import remove_images, ApproximateIndex
 
 # from prodigy_ann.util import batched, setup_index, remove_images, new_image_example_stream, HTML, JS, CSS
 
@@ -24,22 +25,11 @@ def image_index(source: Path, index_path: Path):
     """Builds an HSNWLIB index on example text data."""
     # Store sentences as a list, not perfect, but works.
     log("RECIPE: Calling `ann.image.index`")
-    stream = get_stream(source)
-    stream.apply(remove_images)
-    examples = list(stream)
-
-    # Setup index
-    model = SentenceTransformer('clip-ViT-B-32')
-    index = setup_index(model, size=len(examples))
-
-    # Index everything, progbar and save
-    iter_examples = tqdm(examples, desc="indexing")
-    for batch in batched(iter_examples, n=64):
-        embeddings = model.encode([Image.open(ex['path']) for ex in batch])
-        index.add_items(embeddings)
-
+    index = ApproximateIndex('clip-ViT-B-32', source, funcs=[remove_images])
+    index.build_index()
+    
     # Hnswlib demands a string as an output path
-    index.save_index(str(index_path))
+    index.store_index(index_path)
     log(f"RECIPE: Index stored at {index_path}")
 
 
@@ -60,16 +50,12 @@ def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: i
     if not query:
         raise ValueError("must pass query")
 
-    # Store sentences as a list, not perfect, but works.
-    stream = get_stream(source)
-    stream.apply(remove_images)
-    examples = list(stream)
-
-    # Setup index
-    stream = new_image_example_stream(examples, index_path, query=query, n=n)
+    index = ApproximateIndex('clip-ViT-B-32', source, index_path, funcs=[remove_images])
+    stream = index.new_stream(query, n=n)
     if remove_base64:
         stream = remove_images(stream)
     srsly.write_jsonl(out_path, stream)
+    srsly.
     log(f"RECIPE: New stream stored at {out_path}")
 
 
