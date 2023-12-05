@@ -1,13 +1,10 @@
 from pathlib import Path
 
 import srsly
-from sentence_transformers import SentenceTransformer
-from tqdm import tqdm
-from PIL import Image
 
 from prodigy import recipe
 from prodigy.util import log
-from prodigy.components.stream import get_stream, Stream
+from prodigy.components.stream import Stream
 from prodigy.recipes.image import image_manual
 from .util import remove_images, ApproximateIndex
 
@@ -55,7 +52,6 @@ def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: i
     if remove_base64:
         stream = remove_images(stream)
     srsly.write_jsonl(out_path, stream)
-    srsly.
     log(f"RECIPE: New stream stored at {out_path}")
 
 

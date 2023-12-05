@@ -4,7 +4,6 @@ import itertools as it
 from pathlib import Path
 from typing import List, Dict, Optional, Callable
 import textwrap
-import srsly 
 from tqdm import tqdm
 from PIL import Image
 from sentence_transformers import SentenceTransformer
@@ -85,6 +84,7 @@ function refreshData() {
     .event('stream-reset', event_data)
     .then(updated_example => {
       console.log('Updating Current Example with new data:', updated_example)
+      window.prodigy.resetQueue();
       window.prodigy.update(updated_example)
       document.querySelector('#loadingIcon').style.display = 'none'
     })
@@ -166,15 +166,8 @@ class ApproximateIndex:
 
 def stream_reset_calback(index_obj: ApproximateIndex, n:int=100):
     def stream_reset(ctrl: Controller, *, query: str):
-        log(f"RECIPE: Stream reset with query: {query}")
-        new_examples = list(index_obj.new_stream(query, n=n))
-        old_wrappers = ctrl.stream._wrappers
-        ctrl.stream = Stream.from_iterable(new_examples)
-        ctrl.stream._wrappers = old_wrappers
-        for sess in ctrl.get_sessions():
-            ctrl.stream.ensure_queue(sess.id)
-        for sess in ctrl.get_sessions():
-            sess._stream = ctrl.stream
+        new_stream = Stream.from_iterable(index_obj.new_stream(query, n=n))
+        ctrl.reset_stream(new_stream, prepend_old_wrappers=True)
         return next(ctrl.stream)
     return stream_reset
 
