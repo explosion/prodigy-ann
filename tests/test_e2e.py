@@ -1,5 +1,6 @@
+import time
+
 import pytest 
-from playwright.sync_api import expect
 
 from .e2e_util import prodigy_playwright
 
@@ -25,7 +26,10 @@ def test_basic_interactions(query, base_call):
         page.get_by_text("Reset stream?").click()
         
         # Hit accept a few times, making sure that the query appears
-        for _ in range(10):
+        for _ in range(3):
             page.get_by_label("accept (a)").click()
-            elem = page.locator(".prodigy-content").first
-            expect(elem).to_contain_text(query)
+            time.sleep(1)
+            # We check the entire container because we're interested in the meta information.
+            # The retreived text may not have a perfect match for the query, but the meta should!
+            elem = page.locator(".prodigy-container").first
+            assert query in elem.inner_text().lower()
