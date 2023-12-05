@@ -19,7 +19,7 @@ def image_index(source: Path, index_path: Path):
     """Builds an HSNWLIB index on example image data."""
     # Store sentences as a list, not perfect, but works.
     log("RECIPE: Calling `ann.image.index`")
-    index = ApproximateIndex('clip-ViT-B-32', source, funcs=[remove_images])
+    index = ApproximateIndex('clip-ViT-B-32', source)
     index.build_index(setting="image")
     
     # Hnswlib demands a string as an output path
@@ -43,7 +43,7 @@ def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: i
     if not query:
         raise ValueError("must pass query")
 
-    index = ApproximateIndex('clip-ViT-B-32', source, index_path, funcs=[remove_images])
+    index = ApproximateIndex('clip-ViT-B-32', source, index_path)
     stream = index.new_stream(query, n=n)
     if remove_base64:
         stream = remove_images(stream)

@@ -106,14 +106,12 @@ def add_hashes(examples):
         yield set_hashes(ex)
 
 class ApproximateIndex:
-    def __init__(self, model_name:str, source: Path, index_path: Optional[Path] = None, funcs:List[Callable]=list()):
+    def __init__(self, model_name:str, source: Path, index_path: Optional[Path] = None):
         log(f"INDEX: Using {model_name=} and source={str(source)}.")
         stream = get_stream(source)
 
         # Always add the hashes at the end to prevent warning.
-        funcs.append(add_hashes)
-        for func in funcs:
-            stream.apply(func)
+        stream.apply(add_hashes)
         
         # Setup model and put everything in memory
         self.model = SentenceTransformer(model_name)
