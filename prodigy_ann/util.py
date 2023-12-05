@@ -142,7 +142,7 @@ class ApproximateIndex:
         self.index.save_index(str(path))
         log(f"INDEX: Index file stored at {path}.")
     
-    def new_stream(self, query:str, n:int=100, funcs:List[Callable]=list()):
+    def new_stream(self, query:str, n:int=100):
         log(f"INDEX: Creating new stream of {n} examples using {query=}.")
         embedding = self.model.encode([query])[0]
         items, distances = self.index.knn_query([embedding], k=n)
@@ -155,10 +155,7 @@ class ApproximateIndex:
             ex['meta']['index'] = int(lab)
             ex['meta']['distance'] = float(dist)
             ex['meta']["query"] = query
-
-            # Apply functions
-            for func in funcs:
-                ex = func(ex)
+            
             # Don't forget hashes
             yield set_hashes(ex)
 
