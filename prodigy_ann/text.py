@@ -123,6 +123,7 @@ def ner_ann_manual(
         spacy_mod = spacy.load(nlp)
     index = ApproximateIndex(model_name='all-MiniLM-L6-v2', source=examples, index_path=index_path)
     stream = index.new_stream(query, n=n)
+    
     # Only update the components if the user wants to allow the user to reset the stream
     components = ner_manual(dataset, spacy_mod, stream, label=labels.split(","))
     if allow_reset:
@@ -173,6 +174,7 @@ def spans_ann_manual(
         spacy_mod = spacy.load(nlp)
     index = ApproximateIndex(model_name='all-MiniLM-L6-v2', source=examples, index_path=index_path)
     stream = index.new_stream(query, n=n)
+
     # Only update the components if the user wants to allow the user to reset the stream
     components = spans_manual(dataset, spacy_mod, stream, label=labels.split(","), patterns=patterns)
     if allow_reset:
@@ -181,7 +183,7 @@ def spans_ann_manual(
             {"view_id": "html", "html_template": HTML}
         ]
         components["event_hooks"] = {
-            "stream-reset": stream_reset_calback(examples, index_path)
+            "stream-reset": stream_reset_calback(index, n=n)
         }
         components["view_id"] = "blocks"
         components["config"]["javascript"] = JS

@@ -4,11 +4,8 @@ import srsly
 
 from prodigy import recipe
 from prodigy.util import log
-from prodigy.components.stream import Stream
 from prodigy.recipes.image import image_manual
-from .util import remove_images, ApproximateIndex
-
-# from prodigy_ann.util import batched, setup_index, remove_images, new_image_example_stream, HTML, JS, CSS
+from .util import remove_images, ApproximateIndex, JS, CSS, HTML, stream_reset_calback
 
 
 @recipe(
@@ -23,11 +20,10 @@ def image_index(source: Path, index_path: Path):
     # Store sentences as a list, not perfect, but works.
     log("RECIPE: Calling `ann.image.index`")
     index = ApproximateIndex('clip-ViT-B-32', source, funcs=[remove_images])
-    index.build_index()
+    index.build_index(setting="image")
     
     # Hnswlib demands a string as an output path
     index.store_index(index_path)
-    log(f"RECIPE: Index stored at {index_path}")
 
 
 @recipe(
@@ -55,15 +51,6 @@ def image_fetch(source: Path, index_path: Path, out_path: Path, query: str, n: i
     log(f"RECIPE: New stream stored at {out_path}")
 
 
-def stream_reset_calback(source, index_path, n):
-    def stream_reset(ctrl, *, query: str):
-        log(f"RECIPE: Stream reset with query: {query}")
-        new_examples = new_image_example_stream(source, index_path, query=query, n=n)
-        ctrl.stream = Stream.from_iterable(new_examples)
-        return next(ctrl.stream)
-    return stream_reset
-
-
 @recipe(
     "image.ann.manual",
     # fmt: off
@@ -88,8 +75,9 @@ def image_ann_manual(
         allow_reset: bool = False,
 ):
     """Run image.manual using a query to populate the stream."""
-    new_stream = new_image_example_stream(source, index_path, query=query, n=n)
-    components = image_manual(dataset, source=new_stream, loader="images", label=labels.split(","), remove_base64=remove_base64)
+    index = ApproximateIndex(model_name='clip-ViT-B-32', source=source, index_path=index_path)
+    stream = index.new_stream(query, n=n)
+    components = image_manual(dataset, source=stream, loader="images", label=labels.split(","), remove_base64=remove_base64)
     # Only update the components if the user wants to allow the user to reset the stream
     if allow_reset:
         blocks = [
@@ -97,7 +85,7 @@ def image_ann_manual(
             {"view_id": "html", "html_template": HTML}
         ]
         components["event_hooks"] = {
-            "stream-reset": stream_reset_calback(source, index_path, n)
+            "stream-reset": stream_reset_calback(index, n)
         }
         components["view_id"] = "blocks"
         components["config"]["javascript"] = JS

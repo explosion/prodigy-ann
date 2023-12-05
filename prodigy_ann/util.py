@@ -1,8 +1,6 @@
-import base64
-from io import BytesIO
 import itertools as it
 from pathlib import Path
-from typing import List, Dict, Optional, Callable
+from typing import List, Optional, Callable, Literal
 import textwrap
 from tqdm import tqdm
 from PIL import Image
@@ -130,10 +128,13 @@ class ApproximateIndex:
             self.index.load_index(str(index_path), max_elements=len(self.examples))
             log(f"RECIPE: Loaded index from {index_path}")
     
-    def build_index(self) -> "ApproximateIndex":
+    def build_index(self, setting: Literal["text", "image"] = "text") -> "ApproximateIndex":
         # Index everything, progbar and save
+        log(f"INDEX: About to build index with {setting=}.")
         iter_examples = tqdm(self.examples, desc="indexing")
         for batch in batched(iter_examples, n=256):
+            if setting == "image":
+                batch = [Image.open(ex['path']) for ex in batch]
             embeddings = self.model.encode(batch)
             self.index.add_items(embeddings)
         log(f"INDEX: Indexed {len(self.examples)} examples.")
@@ -172,43 +173,9 @@ def stream_reset_calback(index_obj: ApproximateIndex, n:int=100):
     return stream_reset
 
 
-def base64_image(example: Dict) -> str:
-    """Turns a PdfPage into a base64 image for Prodigy"""
-    pil_image = Image.open(example['path']).convert('RGB')
-    with BytesIO() as buffered:
-        pil_image.save(buffered, format="JPEG")
-        img_str = base64.b64encode(buffered.getvalue())
-    return f"data:image/png;base64,{img_str.decode('utf-8')}"
-
-
 def remove_images(examples):
     # Remove all data URIs before storing example in the database
     for eg in examples:
         if eg.get("image", "").startswith("data:"):
             del eg["image"]
         yield set_hashes(eg)
-
-
-def new_image_example_stream(
-        source: Path,
-        index_path:Index,
-        query:str,
-        n:int=200
-    ):
-    """New generator based on query/index/model."""
-    stream = get_stream(source)
-    stream.apply(remove_images)
-    examples = [ex for ex in stream]
-
-    model = SentenceTransformer('clip-ViT-B-32')
-    embedding = model.encode([query])[0]
-    index = load_index(path=index_path, model=model, size=len(examples))
-    items, distances = index.knn_query([embedding], k=n)
-
-    for lab, dist in zip(items[0].tolist(), distances[0].tolist()):
-        ex = {
-            **examples[int(lab)],
-            "meta": {"distance": float(dist), "query": query},
-        }
-        ex['image'] = base64_image(ex)
-        yield ex
