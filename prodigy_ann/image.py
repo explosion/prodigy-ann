@@ -16,7 +16,7 @@ from .util import remove_images, ApproximateIndex, JS, CSS, HTML, stream_reset_c
     # fmt: on
 )
 def image_index(source: Path, index_path: Path):
-    """Builds an HSNWLIB index on example text data."""
+    """Builds an HSNWLIB index on example image data."""
     # Store sentences as a list, not perfect, but works.
     log("RECIPE: Calling `ann.image.index`")
     index = ApproximateIndex('clip-ViT-B-32', source, funcs=[remove_images])
