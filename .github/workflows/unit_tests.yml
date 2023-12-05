@@ -43,7 +43,10 @@ jobs:
         shell: bash
         run: python -m ruff prodigy_ann tests
 
+      # The e2e tests need to run after because the sbert download may mess things up.
       - name: Run pytest
         if: always()
         shell: bash
-        run: python -m pytest tests
+        run: |
+          python -m pytest tests -m "not e2e"
+          python -m pytest tests -m "e2e"

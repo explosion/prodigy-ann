@@ -12,6 +12,7 @@ base_calls = [
 
 @pytest.mark.parametrize("query", ["benchmark", "corpus"])
 @pytest.mark.parametrize("base_call", base_calls)
+@pytest.mark.e2e
 def test_basic_interactions(query, base_call):
     """Ensure that we check e2e that the query appears when we reset the stream."""
     extra_settings = "tests/datasets/new-dataset.jsonl tests/datasets/new-dataset.index --query download --allow-reset --n 20 --labels foo,bar,buz"
