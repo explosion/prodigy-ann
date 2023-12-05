@@ -1,6 +1,6 @@
 import itertools as it
 from pathlib import Path
-from typing import List, Optional, Callable, Literal
+from typing import Optional, Literal
 import textwrap
 from tqdm import tqdm
 from PIL import Image
