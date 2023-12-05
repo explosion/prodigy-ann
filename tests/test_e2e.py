@@ -21,8 +21,9 @@ def test_basic_interactions(query, base_call):
         # Reset the stream
         page.get_by_text("Reset stream?").click()
         page.get_by_label("New query for ANN:").click()
-        page.get_by_label("New query for ANN:").fill(query)
+        page.get_by_label("New query for ANN:").type(query, delay=150)
         page.get_by_role("button", name="Refresh Stream").click()
+        time.sleep(2)
         page.get_by_text("Reset stream?").click()
         
         # Hit accept a few times, making sure that the query appears
