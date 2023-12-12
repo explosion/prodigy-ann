@@ -7,7 +7,7 @@ from PIL import Image
 from sentence_transformers import SentenceTransformer
 from hnswlib import Index
 from prodigy.util import set_hashes
-from prodigy.util import log
+from prodigy.util import log, msg
 from prodigy.components.stream import Stream
 from prodigy.components.stream import get_stream
 from prodigy.core import Controller
@@ -144,6 +144,8 @@ class ApproximateIndex:
     
     def new_stream(self, query:str, n:int=100):
         log(f"INDEX: Creating new stream of {n} examples using {query=}.")
+        if len(self.examples) < n:
+            msg.fail(f"Number of examples, {len(self.examples)}, in index is smaller than query size, {n}. Reduce `--n`.", exits=True)
         embedding = self.model.encode([query])[0]
         items, distances = self.index.knn_query([embedding], k=n)
         for lab, dist in zip(items[0].tolist(), distances[0].tolist()):
